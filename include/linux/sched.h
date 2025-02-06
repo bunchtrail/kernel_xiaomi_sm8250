@@ -1530,20 +1530,20 @@ struct task_struct {
 	ANDROID_KABI_RESERVE(3);
 	ANDROID_KABI_RESERVE(4);
 	ANDROID_KABI_RESERVE(5);
-#if defined(CONFIG_KSU_SUSFS_SUS_PATH)
+#if defined(CONFIG_KSU_SUSFS)
 	ANDROID_KABI_USE(6, u64 susfs_task_state);
 #else
 	ANDROID_KABI_RESERVE(6);
-#endif // #if defined(CONFIG_KSU_SUSFS_SUS_PATH)
+#endif // #if defined(CONFIG_KSU_SUSFS)
 #else
-#if defined(CONFIG_KSU_SUSFS_SUS_PATH)
+#if defined(CONFIG_KSU_SUSFS)
 	u64 susfs_task_state;
 #endif
 	struct mutex			futex_exit_mutex;
 #endif
 
 	ANDROID_KABI_RESERVE(7);
-#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+#ifdef CONFIG_KSU_SUSFS
 	ANDROID_KABI_USE(8, u64 susfs_last_fake_mnt_id);
 #else
 	ANDROID_KABI_RESERVE(8);
@@ -1555,10 +1555,10 @@ struct package_runtime_info pkg;
 	 * New fields for task_struct should be added above here, so that
 	 * they are included in the randomized portion of task_struct.
 	 */
-#if defined(CONFIG_KSU_SUSFS_SUS_MOUNT) && !defined(ANDROID_KABI_RESERVE)
+#if defined(CONFIG_KSU_SUSFS) && !defined(ANDROID_KABI_RESERVE)
 	u64 susfs_task_state;
 #endif
-#if defined(CONFIG_KSU_SUSFS_SUS_MOUNT) && !defined(ANDROID_KABI_RESERVE)
+#if defined(CONFIG_KSU_SUSFS) && !defined(ANDROID_KABI_RESERVE)
 	u64 susfs_last_fake_mnt_id;
 #endif
 	randomized_struct_fields_end
