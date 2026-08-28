@@ -10,6 +10,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      CLANG_REPO_COMMIT: b13a969798dd18ef2af4f7225fd271565e7e135f
+      KERNELSU_COMMIT: 99155969e37457a8ca0fa6c17c788cc2a0b67f0c
+      ANYKERNEL_BASE_SHA256: a7b9acf5e5d404df5bb88ac0848d5ccd5057b35fe13beb8d09fe6e7c5ea9a3b6
     steps:
       - name: Checkout kernel
         uses: actions/checkout@v4
@@ -26,10 +30,14 @@ jobs:
         run: |
           rm -rf "$HOME/clang" "$HOME/prebuilts"
           export GIT_LFS_SKIP_SMUDGE=1
-          git clone --depth 1 --no-checkout -b aosp16-sync \
-            https://github.com/bluestacks/prebuilts-clang-host-linux-x86-a16 "$HOME/prebuilts"
+          git init "$HOME/prebuilts"
+          git -C "$HOME/prebuilts" remote add origin \
+            https://github.com/bluestacks/prebuilts-clang-host-linux-x86-a16
+          git -C "$HOME/prebuilts" sparse-checkout init --cone
           git -C "$HOME/prebuilts" sparse-checkout set clang-r563880c
-          git -C "$HOME/prebuilts" checkout HEAD -- .
+          git -C "$HOME/prebuilts" fetch --depth 1 origin "$CLANG_REPO_COMMIT"
+          git -C "$HOME/prebuilts" checkout --detach FETCH_HEAD
+          test "$(git -C "$HOME/prebuilts" rev-parse HEAD)" = "$CLANG_REPO_COMMIT"
           git -C "$HOME/prebuilts" lfs pull --include="clang-r563880c/**"
           mv "$HOME/prebuilts/clang-r563880c" "$HOME/clang"
           cat "$HOME/clang/AndroidVersion.txt"
@@ -41,8 +49,9 @@ jobs:
           git init KernelSU-Next
           cd KernelSU-Next
           git remote add origin https://github.com/rifsxd/KernelSU-Next.git
-          git fetch --depth 1 origin 99155969e37457a8ca0fa6c17c788cc2a0b67f0c
+          git fetch --depth 1 origin "$KERNELSU_COMMIT"
           git checkout FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$KERNELSU_COMMIT"
           cd ..
           ln -s ../KernelSU-Next/kernel drivers/kernelsu
           echo "drivers/kernelsu -> $(readlink drivers/kernelsu)"
@@ -59,7 +68,8 @@ jobs:
           export PATH="$HOME/clang/bin:$PATH"
           export LD_LIBRARY_PATH="$HOME/clang/lib64:${LD_LIBRARY_PATH:-}"
           make O=out ARCH=arm64 lmi_defconfig
-          grep -E "CONFIG_KSU=y|CONFIG_KSU_SUSFS=y" out/.config || echo "WARNING: KSU config check"
+          grep -qx "CONFIG_KSU=y" out/.config
+          grep -qx "CONFIG_KSU_SUSFS=y" out/.config
           make -j"$(nproc)" O=out ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
@@ -74,16 +84,18 @@ jobs:
       - name: Verify built image
         run: |
           echo "--- localversion:"
-          grep LOCALVERSION out/.config
+          grep -qx 'CONFIG_LOCALVERSION="-Perf_LMI_v311c_A16__KSUN_raystef66_fix1"' out/.config
+          strings out/arch/arm64/boot/Image > /tmp/image.strings
           echo "--- fix marker in Image:"
-          strings out/arch/arm64/boot/Image | grep -F "exit rapid soc decrease" || echo "::warning::marker string not found (check config)"
+          grep -F "exit rapid soc decrease" /tmp/image.strings
           echo "--- toolchain string embedded in kernel:"
-          strings out/arch/arm64/boot/Image | grep -m1 "based on r563880c" || true
+          grep -m1 "based on r563880c" /tmp/image.strings
 
       - name: Package flashable AnyKernel3 zip
         run: |
           curl -L --retry 3 -o /tmp/orig.zip \
             "https://github.com/raystef66/kernel_xiaomi_sm8250/releases/download/v311c_A16_KSUN/Perf_LMI_v311c_A16_KSUN_raystef66.zip"
+          echo "$ANYKERNEL_BASE_SHA256  /tmp/orig.zip" | sha256sum -c -
           rm -rf /tmp/ak3 && mkdir -p /tmp/ak3
           cd /tmp/ak3
           unzip -q /tmp/orig.zip
