@@ -1,0 +1,50 @@
+From: Adapted from liyafe1997 <liyafe1997@126.com>
+Subject: [PATCH] power: supply: qcom: exit rapid_soc_dec when Vbatt > 3700 mV
+
+Backport of https://github.com/liyafe1997/Xiaomi-fix-battery-one-percent/commit/83cb4c684d0a483e8c2c39f6ae80be428b855d25
+Fixes battery stuck at 1% / 0% on PM8150 FG Gen4 (lmi / Poco F2 Pro).
+
+Adaptation for raystef66 v311c tree: added forward declaration of
+fg_gen4_rapid_soc_config() because in this tree the function is defined
+after fg_gen4_get_prop_soc_scale() which now calls it.
+
+---
+ drivers/power/supply/qcom/qpnp-fg-gen4.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/drivers/power/supply/qcom/qpnp-fg-gen4.c b/drivers/power/supply/qcom/qpnp-fg-gen4.c
+--- a/drivers/power/supply/qcom/qpnp-fg-gen4.c
++++ b/drivers/power/supply/qcom/qpnp-fg-gen4.c
+@@ -413,6 +413,7 @@ static DEVICE_ATTR_RW(sram_dump_period_ms);
+ 
+ static int fg_gen4_validate_soc_scale_mode(struct fg_gen4_chip *chip);
+ static int fg_gen4_esr_fast_calib_config(struct fg_gen4_chip *chip, bool en);
++static int fg_gen4_rapid_soc_config(struct fg_gen4_chip *chip, bool en);
+ 
+ static struct fg_sram_param pm8150b_v1_sram_params[] = {
+ 	PARAM(BATT_SOC, BATT_SOC_WORD, BATT_SOC_OFFSET, 4, 1, 1, 0, NULL,
+@@ -1226,6 +1227,23 @@ static int fg_gen4_get_prop_soc_scale(struct fg_gen4_chip *chip)
+ 	chip->vbatt_res = chip->vbatt_avg - chip->dt.cutoff_volt_mv;
+ 	fg_dbg(fg, FG_FVSS, "Vbatt now=%d Vbatt avg=%d Vbatt res=%d\n",
+ 		chip->vbatt_now, chip->vbatt_avg, chip->vbatt_res);
+ 
++	/* Exit rapid soc decrease mode when battery voltage > 3700mV to recover real soc value */
++	if (chip->vbatt_avg > 3700) {
++		if (chip->dt.rapid_soc_dec_en) {
++			if(chip->rapid_soc_dec_en) {
++				fg_dbg(fg, FG_STATUS, "Vbatt > 3700, exit rapid soc decrease\n", fg->charge_status);
++				rc = fg_gen4_rapid_soc_config(chip, false);
++				if (rc < 0)
++					pr_err("Error in configuring for rapid SOC reduction rc:%d\n",
++						rc);
++				chip->rapid_soc_dec_en = false;
++			}
++		} else if (chip->vbatt_low) {
++			fg_dbg(fg, FG_STATUS, "Vbatt > 3700, reset vbatt_low = false\n", fg->charge_status);
++			chip->vbatt_low = false;
++		}
++	}
++
+ 	return rc;
+ }
+ 

@@ -1,0 +1,99 @@
+name: Build Perf LMI v311c (rapid_soc_dec fix)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout kernel
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison flex libssl-dev libncurses5-dev libncurses-dev \
+            cpio python3 zip unzip curl wget git build-essential \
+            binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi
+
+      - name: Download AOSP clang r563880c (exact toolchain of official v311c)
+        run: |
+          mkdir -p "$HOME/clang"
+          curl -L --retry 3 --retry-delay 5 -o /tmp/clang.tar.gz \
+            "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android16-qpr2-release/clang-r563880c.tar.gz"
+          tar -xf /tmp/clang.tar.gz -C "$HOME/clang"
+          "$HOME/clang/bin/clang" --version
+          "$HOME/clang/bin/clang" --version | grep -q "r563880c" || { echo "::error::clang version mismatch - expected r563880c"; exit 1; }
+
+      - name: Set up KernelSU-Next (pinned 99155969, as in official v311c build)
+        run: |
+          git init KernelSU-Next
+          cd KernelSU-Next
+          git remote add origin https://github.com/rifsxd/KernelSU-Next.git
+          git fetch --depth 1 origin 99155969e37457a8ca0fa6c17c788cc2a0b67f0c
+          git checkout FETCH_HEAD
+          cd ..
+          ln -s ../KernelSU-Next/kernel drivers/kernelsu
+          echo "drivers/kernelsu -> $(readlink drivers/kernelsu)"
+          ls drivers/kernelsu/ksu.c
+
+      - name: Verify the fix is present in sources
+        run: |
+          grep -n "Exit rapid soc decrease mode" drivers/power/supply/qcom/qpnp-fg-gen4.c
+          grep -n "rapid_soc_config" drivers/power/supply/qcom/qpnp-fg-gen4.c | head -5
+          grep -n '_fix1' arch/arm64/configs/lmi_defconfig
+
+      - name: Build kernel
+        run: |
+          export PATH="$HOME/clang/bin:$PATH"
+          export LD_LIBRARY_PATH="$HOME/clang/lib64:${LD_LIBRARY_PATH:-}"
+          make O=out ARCH=arm64 lmi_defconfig
+          grep -E "CONFIG_KSU=y|CONFIG_KSU_SUSFS=y" out/.config || echo "WARNING: KSU config check"
+          make -j"$(nproc)" O=out ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            LD=ld.lld \
+            AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump \
+            READELF=llvm-readelf OBJSIZE=llvm-size STRIP=llvm-strip
+          test -f out/arch/arm64/boot/Image || { echo "::error::Image not built"; exit 1; }
+          ls -la out/arch/arm64/boot/Image
+
+      - name: Verify built image
+        run: |
+          echo "--- localversion:"
+          grep LOCALVERSION out/.config
+          echo "--- fix marker in Image:"
+          strings out/arch/arm64/boot/Image | grep -F "exit rapid soc decrease" || echo "::warning::marker string not found (check config)"
+          echo "--- toolchain string embedded in kernel:"
+          strings out/arch/arm64/boot/Image | grep -m1 "based on r563880c" || true
+
+      - name: Package flashable AnyKernel3 zip
+        run: |
+          curl -L --retry 3 -o /tmp/orig.zip \
+            "https://github.com/raystef66/kernel_xiaomi_sm8250/releases/download/v311c_A16_KSUN/Perf_LMI_v311c_A16_KSUN_raystef66.zip"
+          rm -rf /tmp/ak3 && mkdir -p /tmp/ak3
+          cd /tmp/ak3
+          unzip -q /tmp/orig.zip
+          ls -la
+          rm -f Image
+          cp "$GITHUB_WORKSPACE/out/arch/arm64/boot/Image" .
+          zip -r9 -q "$GITHUB_WORKSPACE/Perf_LMI_v311c_A16_KSUN_raystef66_fix1.zip" .
+          cd "$GITHUB_WORKSPACE"
+          sha256sum Perf_LMI_v311c_A16_KSUN_raystef66_fix1.zip | tee sha256.txt
+          ls -la Perf_LMI_v311c_A16_KSUN_raystef66_fix1.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Perf_LMI_v311c_A16_KSUN_raystef66_fix1
+          path: |
+            Perf_LMI_v311c_A16_KSUN_raystef66_fix1.zip
+            sha256.txt
+          retention-days: 14
+          if-no-files-found: error
