@@ -1,0 +1,121 @@
+name: Bug report
+description: Report a reproducible kernel, battery, or device problem
+title: "[Bug]: "
+labels: []
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Remove personal data, tokens, serial numbers, and unrelated logs before submitting.
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Exact model and codename (for example, POCO F2 Pro / lmi).
+    validations:
+      required: true
+
+  - type: input
+    id: rom
+    attributes:
+      label: ROM and build
+      description: ROM name, version, and build date.
+    validations:
+      required: true
+
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+    validations:
+      required: true
+
+  - type: textarea
+    id: kernel
+    attributes:
+      label: Kernel version
+      description: Paste the complete output of `uname -a`.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: modified
+    attributes:
+      label: Kernel state
+      description: Was the published kernel or package modified?
+      options:
+        - Clean published build
+        - Modified after download
+        - Self-built from the documented commit
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: root
+    attributes:
+      label: KernelSU and root state
+      description: State whether KernelSU works and list relevant Magisk/KernelSU modules or modifications.
+    validations:
+      required: true
+
+  - type: textarea
+    id: symptoms
+    attributes:
+      label: Battery or kernel symptoms
+      description: Include timestamps, displayed SOC, charger state, and what changed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Give the shortest repeatable sequence and say how often it occurs.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: telemetry
+    attributes:
+      label: Voltage and SOC readings
+      description: Include `capacity`, `voltage_now`, `current_now`, `status`, and `charge_counter` where available, with units and timestamps.
+      render: text
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Add a minimal redacted `dmesg` excerpt or link. Do not upload partition dumps, vendor blobs, keys, or personal data.
+      render: text
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Submission checklist
+      options:
+        - label: I verified that this is a public-safe, redacted report with no secrets or personal data.
+          required: true
+        - label: I understand that a successful boot does not by itself validate the low-battery fix.
+          required: true
