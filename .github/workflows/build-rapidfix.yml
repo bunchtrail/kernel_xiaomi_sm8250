@@ -22,23 +22,16 @@ jobs:
             binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi
 
       - name: Fetch AOSP clang r563880c (exact toolchain of official v311c)
-        timeout-minutes: 80
+        timeout-minutes: 90
         run: |
-          fetch_tc() {
-            rm -rf "$HOME/prebuilts" "$HOME/clang"
-            git clone --depth 1 --filter=blob:none --no-checkout -b "$2" "$1" "$HOME/prebuilts"
-            git -C "$HOME/prebuilts" sparse-checkout set clang-r563880c
-            git -C "$HOME/prebuilts" checkout HEAD -- .
-            test -d "$HOME/prebuilts/clang-r563880c"
-            mv "$HOME/prebuilts/clang-r563880c" "$HOME/clang"
-            test -x "$HOME/clang/bin/clang"
-          }
-          if fetch_tc "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86" "android16-qpr2-release"; then
-            echo "clang fetched from canonical googlesource"
-          else
-            echo "canonical fetch failed, falling back to bluestacks mirror"
-            fetch_tc "https://github.com/bluestacks/prebuilts-clang-host-linux-x86-a16" "aosp16-sync"
-          fi
+          rm -rf "$HOME/clang" /tmp/clang-mirror.tar.gz /tmp/clang-mirror
+          curl -fL --retry 10 --retry-all-errors --retry-delay 10 \
+            --connect-timeout 30 --max-time 5400 \
+            -o /tmp/clang-mirror.tar.gz \
+            "https://codeload.github.com/bluestacks/prebuilts-clang-host-linux-x86-a16/tar.gz/refs/heads/aosp16-sync"
+          mkdir -p /tmp/clang-mirror
+          tar -xzf /tmp/clang-mirror.tar.gz -C /tmp/clang-mirror
+          mv /tmp/clang-mirror/prebuilts-clang-host-linux-x86-a16-aosp16-sync/clang-r563880c "$HOME/clang"
           cat "$HOME/clang/AndroidVersion.txt"
           "$HOME/clang/bin/clang" --version
           "$HOME/clang/bin/clang" --version | grep -q "r563880c" || { echo "::error::clang version mismatch - expected r563880c"; exit 1; }
