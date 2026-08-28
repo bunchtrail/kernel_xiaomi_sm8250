@@ -9,7 +9,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Checkout kernel
         uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
             binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi
 
       - name: Fetch AOSP clang r563880c (exact toolchain of official v311c)
-        timeout-minutes: 20
+        timeout-minutes: 80
         run: |
           fetch_tc() {
             rm -rf "$HOME/prebuilts" "$HOME/clang"
